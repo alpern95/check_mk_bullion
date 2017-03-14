@@ -1,0 +1,228 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# Example of output from bullion_sensor:
+# <<<bullionsensor>>>
+
+def inventory_bullionsensor(parsed):
+#   # print(parsed)
+    for line in parsed:
+        sensor = line[0]
+#       params = None
+        yield sensor, None
+
+# Set status 0 for all sensor exceptions
+def sensor_exception_bullionsensor(sensor, name):
+    if sensor == "BCS":
+        if name == "BCSfault":
+            return 0
+        else:
+            return 1
+    elif sensor == "CPU_0":
+        if name == "CPU_0Status" or \
+           name == "CPU_0fault":
+            return 0
+        else:
+            return 1
+    elif sensor == "CPU_1":
+        if name == "CPU_1Status" or \
+           name == "CPU_1fault":
+            return 0
+        else:
+            return 1
+    elif sensor == "FAN":
+        if name == "FAN_0HPFault" or \
+           name == "FAN_1HPFault" or \
+           name == "FAN_2HPFault" or \
+           name == "FAN_3HPFault" or \
+           name == "FAN_4HPFault" or \
+           name == "FAN_5HPFault":
+            return 0
+        else:
+            return 1
+    elif sensor == "MotherBoard":
+        if name == "CIXfault":
+            return 0
+        else:
+            return 1
+
+    elif sensor == "PCI":
+        if name == "PCI_0fault" or \
+           name == "PCI_1fault" or \
+           name == "PCI_2fault" or \
+           name == "PCI_3fault" or \
+           name == "PCI_4fault" or \
+           name == "PCI_5fault" or \
+           name == "PCI_6fault" or \
+           name == "PCI_1" or \
+           name == "PCI_1RISER":
+            return 0
+        else:
+            return 1
+#   # default return value : 1 (Warning)
+    return 1
+
+def verify_mmr_status_bullionsensor(parsed):
+    status = 0
+    output = ""
+    nb_sensor = 0
+    mmr_up = [False, False, False, False, False, False, False, False]
+
+#   # check if MMR_i is up
+    for line in parsed:
+        if line[0].startswith("Memory Riser"):
+            nb_sensor += 1
+            i = 0
+            while i < 8:
+                if line[1] == "MMR_" + str(i) and line[5] == "OK":
+                    mmr_up[i] == True
+                    break
+                i += 1
+
+#   # check status for MMR which are up
+    for line in parsed:
+        if line[0].startswith("Memory Riser"):
+            i = 0
+            while i < 8:
+                if line[1].startswith("MMR_" + str(i)) and \
+                   mmr_up[i] == True and \
+                   not line[5] == "OK":
+                    status = 1
+                    output += (name + " shouldn't be down, ")
+                i += 1
+
+    return status, output, nb_sensor
+
+# return status, nb of sensors and error output for each items
+def verify_status_bullionsensor(sensor, parsed):
+    status = 0
+    output = ""
+    nb_sensor = 0
+    for line in parsed:
+        if line[0].startswith(sensor):
+            nb_sensor += 1
+            if not line[5] in ["'OK'", "'EntityPresent'", "'battery_presence_detected'", "'Drive_Presence'", "'transition_to_Running'", "'Device_                                               Enabled'", "'FullyRedundant'", "'Cable/Interconnectisconnected'", "'Presencedetected'", "'DevicePresent'"]:
+                if sensor_exception_bullionsensor(line[0], line[1]) == 1:
+                    status = 1
+                    output += line[1] + " : NOK, "
+    return status, output, nb_sensor
+
+def check_bullionsensor(item, params, parsed):
+    infotext = []
+    perfdata =[]
+    ##name , reading, units, state, event
+    for line in parsed:
+#       # 0: sensor, 1: name, 2: reading, 3: units, 4: state, 5: event
+        if line[0] == item:
+            if line[0].startswith('BCS'):
+                status, output, nb_sensor = verify_status_bullionsensor("BCS", parsed)
+                if nb_sensor < 5:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/5,\n" + output
+
+            if line[0].startswith('CPU_0'):
+                status, output, nb_sensor = verify_status_bullionsensor("CPU_0", parsed)
+                if nb_sensor < 6:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/6,\n " + output
+
+            if line[0].startswith('CPU_1'):
+                status, output, nb_sensor = verify_status_bullionsensor("CPU_1", parsed)
+                if nb_sensor < 6:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/6,\n " + output
+
+            if line[0].startswith('FAN'):
+                status, output, nb_sensor = verify_status_bullionsensor("FAN", parsed)
+                if nb_sensor < 32:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/32,\n " + output
+
+            if line[1].startswith('LCP'):
+                status, output, nb_sensor = verify_status_bullionsensor("LCP", parsed)
+                if nb_sensor < 1:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/1,\n " + output
+
+            if line[0].startswith('Memory Riser'):
+                status, output, nb_sensor = verify_mmr_status_bullionsensor(parsed)
+                if nb_sensor < 56:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/56,\n " + output
+
+            if line[0] == "MotherBoard":
+                status, output, nb_sensor = verify_status_bullionsensor("MotherBoard", parsed)
+                if nb_sensor < 25:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/25,\n " + output
+
+            if line[0].startswith('Power'):
+                status, output, nb_sensor = verify_status_bullionsensor("Power", parsed)
+                if nb_sensor < 12:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/12,\n " + output
+
+            if line[0].startswith('PCI'):
+                status, output, nb_sensor = verify_status_bullionsensor("PCI", parsed)
+                if nb_sensor < 21:
+                    status = 1
+                return status, "Nombre de sensors : " + str(nb_sensor) + "/21,\n " + output
+
+#        else:
+#    return worst_status, ', '.join(infotext) , perfdata
+#    return worst_status, ', '.join(infotext), nb_sensor
+
+
+def parse_bullionsensor(info):
+    parsed = []
+    for line in info:
+        line = line[0].split("|")
+        line = line[1], line[3], line[4], line[5], line[12]
+        ## name , reading, units, state, event
+#        line = line[1], line[5], line[12]
+        if line[0].startswith('PCI'):
+            line = "PCI", line[0], line[1], line[2], line[3], line[4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('M'):
+            line = ("Memory Riser"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('CPU_0'):
+            line = ("CPU_0"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('CPU_1'):
+            line = ("CPU_1"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('P'):
+            line = ("Power"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('FAN'):
+            line = ("FAN"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('CIX')or line[0].startswith('HDD') or line[0].startswith('RL') :
+            line = ("MotherBoard"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('BCS'):
+            line = ("BCS"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+        elif line[0].startswith('LCP'):
+            line = ("LCP"), line[0], line[1], line[2], line[3], line [4]
+           # print line
+            parsed.append(line)
+#    print parsed(len)
+#    print parsed
+    return parsed
+
+check_info["bullionsensor"] = {
+    'parse_function'    :        parse_bullionsensor,
+    'check_function':            check_bullionsensor,
+    'inventory_function':        inventory_bullionsensor,
+    'service_description':       'IPMI Bullions sensor',
+    'has_perfdata'        : True,
+}
